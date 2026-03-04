@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LiveTrack — ট্র্যাকার</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--bg:#06090f;--card:#161b22;--border:rgba(255,107,53,0.15);--accent:#ff6b35;--green:#30ffb4;--blue:#58a6ff;--text:#cdd9e5;--muted:#545d68;--glow:0 0 24px rgba(255,107,53,0.3);}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+    header{position:relative;z-index:100;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;background:rgba(13,17,23,0.97);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .brand{display:flex;align-items:center;gap:10px;}
+    .brand-dot{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#cc4400);display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:var(--glow);}
+    .brand h1{font-size:18px;font-weight:800;color:var(--accent);}
+    .brand p{font-size:10px;color:var(--muted);font-family:'Noto Sans Bengali',sans-serif;}
+    .page-tag{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);border:1px solid var(--border);padding:4px 12px;border-radius:20px;background:rgba(255,107,53,0.05);}
+    .main{display:flex;flex:1;overflow:hidden;position:relative;}
+    #map{position:absolute;inset:0;z-index:1;}
+
+    /* Input panel top */
+    .float-top{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:200;width:calc(100% - 32px);max-width:400px;}
+    .input-panel{background:rgba(13,17,23,0.95);border:1px solid var(--border);border-radius:16px;padding:16px;backdrop-filter:blur(16px);}
+    .input-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'Noto Sans Bengali',sans-serif;}
+    .input-row{display:flex;gap:8px;}
+    .code-input{flex:1;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:var(--text);font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;outline:none;transition:all 0.3s;}
+    .code-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,107,53,0.15);}
+    .code-input::placeholder{font-size:11px;letter-spacing:1px;color:var(--muted);font-weight:400;}
+    .btn-go{padding:11px 18px;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all 0.3s;background:linear-gradient(135deg,var(--accent),#cc4400);color:#fff;box-shadow:var(--glow);white-space:nowrap;}
+    .btn-go:hover{transform:translateY(-1px);}
+    .btn-go:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+
+    /* Bottom panel */
+    .float-bottom{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;width:calc(100% - 32px);max-width:400px;display:flex;flex-direction:column;gap:10px;}
+
+    /* Distance big */
+    .dist-panel{background:rgba(13,17,23,0.95);border:1px solid rgba(48,255,180,0.2);border-radius:16px;padding:14px 18px;backdrop-filter:blur(16px);display:none;text-align:center;}
+    .dist-panel.visible{display:block;}
+    .dist-num{font-size:38px;font-weight:800;color:var(--green);line-height:1;}
+    .dist-unit{font-size:12px;color:var(--muted);margin-top:3px;font-family:'Noto Sans Bengali',sans-serif;}
+    .dist-eta{font-size:11px;color:var(--blue);margin-top:6px;font-family:'Noto Sans Bengali',sans-serif;}
+
+    /* Route panel */
+    .route-panel{background:rgba(13,17,23,0.95);border:1px solid rgba(88,166,255,0.2);border-radius:16px;padding:14px 18px;backdrop-filter:blur(16px);display:none;max-height:200px;overflow-y:auto;}
+    .route-panel.visible{display:block;}
+    .route-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'Noto Sans Bengali',sans-serif;}
+    .step{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;font-family:'Noto Sans Bengali',sans-serif;animation:fi 0.3s ease;}
+    @keyframes fi{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+    .step:last-child{border-bottom:none;}
+    .step-n{min-width:22px;height:22px;background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--blue);font-weight:700;flex-shrink:0;}
+
+    /* Stop button */
+    .btn-stop{width:100%;padding:13px;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all 0.3s;background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);color:var(--accent);display:none;}
+    .btn-stop:hover{background:rgba(255,107,53,0.2);}
+
+    /* Live badge */
+    .live-badge{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(13,17,23,0.92);border:1px solid rgba(48,255,180,0.2);border-radius:30px;padding:5px 14px;width:fit-content;margin:0 auto;display:none;}
+    .live-badge.visible{display:flex;}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:lb 1s infinite;}
+    @keyframes lb{0%,100%{opacity:1}50%{opacity:0.2}}
+    .live-badge span{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--green);}
+
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--accent);color:var(--text);padding:10px 20px;border-radius:12px;font-size:12px;z-index:9999;opacity:0;transition:all 0.35s;pointer-events:none;white-space:nowrap;font-family:'Noto Sans Bengali',sans-serif;}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    .leaflet-control-zoom a{background:rgba(13,17,23,0.9)!important;color:var(--accent)!important;border:1px solid rgba(255,107,53,0.2)!important;}
+    ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(88,166,255,0.2);border-radius:3px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-dot">🔍</div>
+    <div><h1>LiveTrack</h1><p>রিয়েল টাইম ট্র্যাকার</p></div>
+  </div>
+  <div class="page-tag">TRACKER</div>
+</header>
+<div class="main">
+  <div id="map"></div>
+
+  <div class="float-top">
+    <div class="input-panel">
+      <div class="input-label">🔑 ট্র্যাকিং কোড দাও (১০ ডিজিট)</div>
+      <div class="input-row">
+        <input class="code-input" id="codeIn" type="text" maxlength="10" placeholder="0000000000"/>
+        <button class="btn-go" id="goBtn" onclick="startTracking()">▶ শুরু</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="float-bottom">
+    <div class="live-badge" id="liveBadge"><div class="live-dot"></div><span>লাইভ ট্র্যাকিং</span></div>
+    <div class="dist-panel" id="distPanel">
+      <div class="dist-num" id="distNum">—</div>
+      <div class="dist-unit" id="distUnit">দূরত্ব হিসাব হচ্ছে...</div>
+      <div class="dist-eta" id="distEta"></div>
+    </div>
+    <div class="route-panel" id="routePanel">
+      <div class="route-title">🗺️ রাস্তার নির্দেশনা</div>
+      <div id="stepsContainer"></div>
+    </div>
+    <button class="btn-stop" id="stopBtn" onclick="stopTracking()">⏹ ট্র্যাকিং বন্ধ করো</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {apiKey:"AIzaSyCM82nQh-gMFiLo40KY_7aCc687I0m5A-w",authDomain:"tast-map-d5068.firebaseapp.com",databaseURL:"https://tast-map-d5068-default-rtdb.firebaseio.com",projectId:"tast-map-d5068",storageBucket:"tast-map-d5068.firebasestorage.app",messagingSenderId:"417954327551",appId:"1:417954327551:web:6f0d5cc805f002a9bf95ca"};
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+
+const map=L.map('map',{zoomControl:true,attributionControl:false}).setView([23.8103,90.4125],14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19}).addTo(map);
+
+let myMarker=null,targetMarker=null,connectLine=null,routeLine=null;
+let myWatchId=null,dbRef=null,tracking=false;
+let myPos=null,targetPos=null;
+let lastRouteTime=0;
+
+// Target icon — orange with arrow
+function targetIcon(h){
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:44px;height:44px;position:relative;">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle,#ff6b35 25%,rgba(255,107,53,0.15) 70%);border-radius:50%;border:3px solid rgba(255,255,255,0.9);box-shadow:0 0 0 6px rgba(255,107,53,0.2),0 0 24px rgba(255,107,53,0.9);"></div>
+      <div style="position:absolute;top:50%;left:50%;width:16px;height:16px;margin-left:-8px;margin-top:-20px;transform:rotate(${h}deg);transform-origin:8px 20px;">
+        <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:16px solid #ff6b35;filter:drop-shadow(0 0 3px #ff6b35);"></div>
+      </div>
+    </div>`,
+    iconSize:[44,44],iconAnchor:[22,22]
+  });
+}
+
+// My icon — blue/teal
+function myIcon(){
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:36px;height:36px;position:relative;">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle,#58a6ff 30%,rgba(88,166,255,0.15) 70%);border-radius:50%;border:3px solid rgba(255,255,255,0.9);box-shadow:0 0 0 5px rgba(88,166,255,0.2),0 0 20px rgba(88,166,255,0.8);"></div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:#fff;border-radius:50%;"></div>
+    </div>`,
+    iconSize:[36,36],iconAnchor:[18,18]
+  });
+}
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function fmtDist(m){
+  if(m<1000)return{n:Math.round(m),u:'মিটার দূরে'};
+  return{n:(m/1000).toFixed(2),u:'কিলোমিটার দূরে'};
+}
+
+function smoothMove(marker, toLat, toLng){
+  const from=marker.getLatLng();
+  const steps=20;let i=0;
+  const iv=setInterval(()=>{
+    i++;
+    const t=i/steps;
+    const e=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    marker.setLatLng([from.lat+(toLat-from.lat)*e,from.lng+(toLng-from.lng)*e]);
+    if(i>=steps){clearInterval(iv);marker.setLatLng([toLat,toLng]);}
+  },16);
+}
+
+// Green connecting line between me and target
+function updateConnectLine(){
+  if(!myPos||!targetPos) return;
+  const pts=[[myPos.lat,myPos.lng],[targetPos.lat,targetPos.lng]];
+  if(!connectLine){
+    connectLine=L.polyline(pts,{color:'#30ffb4',weight:2.5,opacity:0.7,dashArray:'8,6'}).addTo(map);
+  } else {
+    connectLine.setLatLngs(pts);
+  }
+}
+
+// Fit map to show both markers
+function fitBoth(){
+  if(!myPos||!targetPos) return;
+  const bounds=L.latLngBounds([[myPos.lat,myPos.lng],[targetPos.lat,targetPos.lng]]);
+  map.fitBounds(bounds,{padding:[60,60],maxZoom:17,animate:true});
+}
+
+let fitTimeout=null;
+function schedFit(){
+  clearTimeout(fitTimeout);
+  fitTimeout=setTimeout(fitBoth,1500);
+}
+
+async function fetchAndDrawRoute(fromLat,fromLng,toLat,toLng){
+  try{
+    const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`);
+    const d=await r.json();
+    if(d.code!=='Ok') return;
+    const route=d.routes[0];
+
+    // Draw orange route line
+    if(routeLine) map.removeLayer(routeLine);
+    const coords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+    routeLine=L.polyline(coords,{color:'#ff6b35',weight:4,opacity:0.75,dashArray:'12,6'}).addTo(map);
+
+    // ETA
+    const mins=Math.round(route.duration/60);
+    document.getElementById('distEta').textContent=`🕐 আনুমানিক সময়: ${mins} মিনিট`;
+
+    // Steps
+    const steps=route.legs[0].steps;
+    const dirs={
+      'turn-left':'↰ বামে মোড়','turn-right':'↱ ডানে মোড়',
+      'turn-slight-left':'↖ সামান্য বামে','turn-slight-right':'↗ সামান্য ডানে',
+      'turn-sharp-left':'◄ তীক্ষ্ণ বামে','turn-sharp-right':'► তীক্ষ্ণ ডানে',
+      'uturn':'↩ ইউ-টার্ন','straight':'↑ সোজা যাও',
+      'arrive':'📍 পৌঁছে গেছ!','depart':'🚀 রওনা দাও',
+      'merge':'⇒ মিলিয়ে নাও','roundabout':'🔄 রাউন্ডঅ্যাবাউট',
+    };
+    const container=document.getElementById('stepsContainer');
+    container.innerHTML='';
+    steps.filter(s=>s.distance>10).slice(0,12).forEach((s,i)=>{
+      const type=s.maneuver.type+(s.maneuver.modifier?'-'+s.maneuver.modifier:'');
+      const label=dirs[type]||dirs[s.maneuver.type]||'→ এগিয়ে যাও';
+      const dist=s.distance<1000?Math.round(s.distance)+'মি':(s.distance/1000).toFixed(1)+'কিমি';
+      const div=document.createElement('div');
+      div.className='step';
+      div.innerHTML=`<div class="step-n">${i+1}</div><div><b>${label}</b>${s.name?' — '+s.name:''} <span style="color:var(--muted);font-size:10px;">(${dist})</span></div>`;
+      container.appendChild(div);
+    });
+    document.getElementById('routePanel').classList.add('visible');
+  }catch(e){console.warn('Route fetch failed',e);}
+}
+
+function onTargetData(data){
+  if(!data||!data.active) return;
+  const{lat,lng,heading:h=0}=data;
+  targetPos={lat,lng};
+
+  if(!targetMarker){
+    targetMarker=L.marker([lat,lng],{icon:targetIcon(h),zIndexOffset:1000}).addTo(map)
+      .bindPopup('<b style="color:#ff6b35">🎯 Target</b>');
+  } else {
+    smoothMove(targetMarker,lat,lng);
+    setTimeout(()=>{if(targetMarker)targetMarker.setIcon(targetIcon(h));},300);
+  }
+
+  // Distance
+  if(myPos){
+    const dist=haversine(myPos.lat,myPos.lng,lat,lng);
+    const{n,u}=fmtDist(dist);
+    document.getElementById('distNum').textContent=n;
+    document.getElementById('distUnit').textContent=u;
+    document.getElementById('distPanel').classList.add('visible');
+    updateConnectLine();
+    schedFit();
+
+    // Throttle route fetch (every 8 seconds)
+    const now=Date.now();
+    if(now-lastRouteTime>8000){
+      lastRouteTime=now;
+      fetchAndDrawRoute(myPos.lat,myPos.lng,lat,lng);
+    }
+  } else {
+    map.setView([lat,lng],16,{animate:true});
+  }
+}
+
+window.startTracking=function(){
+  const code=document.getElementById('codeIn').value.trim().replace(/\s/g,'');
+  if(!/^\d{10}$/.test(code)){showToast('❌ সঠিক ১০ ডিজিটের কোড দাও');return;}
+  tracking=true;
+  document.getElementById('goBtn').disabled=true;
+  document.getElementById('codeIn').disabled=true;
+  document.getElementById('stopBtn').style.display='block';
+  document.getElementById('liveBadge').classList.add('visible');
+
+  // My location watch
+  if(navigator.geolocation){
+    myWatchId=navigator.geolocation.watchPosition(pos=>{
+      const{latitude:lat,longitude:lng}=pos.coords;
+      myPos={lat,lng};
+      if(!myMarker){
+        myMarker=L.marker([lat,lng],{icon:myIcon(),zIndexOffset:500}).addTo(map)
+          .bindPopup('<b style="color:#58a6ff">📍 আমি</b>');
+        if(!targetPos) map.setView([lat,lng],16,{animate:true});
+      } else {
+        smoothMove(myMarker,lat,lng);
+      }
+      updateConnectLine();
+      if(targetPos){
+        const dist=haversine(lat,lng,targetPos.lat,targetPos.lng);
+        const{n,u}=fmtDist(dist);
+        document.getElementById('distNum').textContent=n;
+        document.getElementById('distUnit').textContent=u;
+      }
+    },{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+  }
+
+  // Firebase listener
+  dbRef=ref(db,`locations/${code}`);
+  onValue(dbRef,snap=>{
+    const data=snap.val();
+    if(!data){showToast('❌ এই কোডে কেউ নেই');return;}
+    onTargetData(data);
+  });
+
+  showToast('✅ ট্র্যাকিং শুরু হয়েছে!');
+};
+
+window.stopTracking=function(){
+  if(myWatchId) navigator.geolocation.clearWatch(myWatchId);
+  if(dbRef) off(dbRef);
+  tracking=false;
+  document.getElementById('goBtn').disabled=false;
+  document.getElementById('codeIn').disabled=false;
+  document.getElementById('stopBtn').style.display='none';
+  document.getElementById('liveBadge').classList.remove('visible');
+  document.getElementById('distPanel').classList.remove('visible');
+  document.getElementById('routePanel').classList.remove('visible');
+  if(connectLine){map.removeLayer(connectLine);connectLine=null;}
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  if(targetMarker){map.removeLayer(targetMarker);targetMarker=null;}
+  if(myMarker){map.removeLayer(myMarker);myMarker=null;}
+  myPos=null; targetPos=null;
+  showToast('⏹ ট্র্যাকিং বন্ধ');
+};
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
+</script>
+</body>
+</html>
